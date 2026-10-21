@@ -1,0 +1,8 @@
+# The project website (docs/, GitHub Pages): built by scripts/build-site.py
+name = "urja"
+sanskrit = "ऊर्जा"
+meaning = "energy"
+tagline = "Battery at a glance: charge ring, time left, power draw, health and cycles, power profile, a charge-limit reminder."
+color = "green"
+kind = "a Vyom tool"
+logo = "assets/logo.svg"

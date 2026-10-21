@@ -1,7 +1,7 @@
 name = "urja"
 title = "Battery"
 description = "Battery at a glance: charge ring, time left, power draw, health and cycles, power profile, a charge-limit reminder."
-version = "0.1.1"
+version = "0.1.2"
 vyom = "0.2.6"
 icon = "󰁹"
 color = "green"
