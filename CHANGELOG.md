@@ -2,6 +2,12 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## v0.1.3 -- 2026-10-21
+
+- Follows the theme: its colours are named (`@accent`, `@crust`...) instead
+  of fixed hex codes, so a theme that redefines them (Vyom 0.2.9's `css`,
+  e.g. [varna](https://github.com/Theyashsawarkar/varna)) recolours it too.
+
 ## v0.1.2 -- 2026-10-21
 
 - A website (GitHub Pages, https://theyashsawarkar.github.io/urja/): the README as a home page, the
