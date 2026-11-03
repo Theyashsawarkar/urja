@@ -2,8 +2,9 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.1.4 -- 2026-11-04
 
+- **The card stays true while it's open**: plug the charger in and it shows within 2 seconds, without disturbing the reminder slider. It used to show the moment you opened it, until you closed it.
 - A logo and a shloka at the top of the README and the website: every Vayu tool has them now.
 
 ## v0.1.3 -- 2026-10-21

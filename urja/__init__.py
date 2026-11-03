@@ -8,12 +8,14 @@ yours nudges you to unplug at (Vayu's battery-limit-watch.sh).
 import math
 import os
 
-from gi.repository import Gtk
+from gi.repository import GLib, Gtk
 
 from vyom import Plugin as Base
 from vyom import ui, util
 
 from . import battery
+
+REFRESH = 2  # seconds between looks at the battery while the card is open
 
 # keybind: Vyom/battery | Left / Right | Change the charge-limit reminder (on the slider)
 # keybind: Vyom/battery | P | Switch the power profile
@@ -79,6 +81,52 @@ class Plugin(Base):
         i = battery.info()
         if not i:
             return ui.vbox(ui.title("No battery"), cls="card")
+        self.shown = self.fingerprint(i)
+        self.top_holder = Gtk.Box()
+        self.top_holder.append(self.build_top(i))
+        self.watch()
+        parts = [self.top_holder]
+        if util.have("powerprofilesctl") and util.run("powerprofilesctl get")[0] == 0:
+            parts.append(self.profiles())
+        if self.limit_file():
+            parts.append(self.limit_slider())
+        esc = ui.hint_label("Esc", "close")
+        esc.set_hexpand(True)
+        esc.set_halign(Gtk.Align.END)
+        foot = ui.hbox(ui.hint_label("P", "power profile"),
+                       ui.hint_label("Left/Right", "reminder") if self.limit_file() else None, esc, spacing=16)
+        foot.add_css_class("urja-foot")
+        parts.append(foot)
+        return ui.vbox(*parts, spacing=18, cls="card")
+
+    @staticmethod
+    def fingerprint(i):
+        """What the top of the card shows: redrawn only when one of these changes."""
+        return (i["status"], i["capacity"], i["plugged"], i["hours"], round(i["watts"], 1))
+
+    def watch(self):
+        """Keep the card true while it's open: plugging the charger in shows in
+        REFRESH seconds. Only the ring and facts are redrawn, so the reminder
+        slider and the power profile aren't disturbed."""
+        if getattr(self, "watch_id", None) is None:
+            self.watch_id = GLib.timeout_add_seconds(REFRESH, self.tick)
+
+    def tick(self):
+        i = battery.info()
+        if i and self.fingerprint(i) != self.shown:
+            self.shown = self.fingerprint(i)
+            old = self.top_holder.get_first_child()
+            if old is not None:
+                self.top_holder.remove(old)
+            self.top_holder.append(self.build_top(i))
+        return True
+
+    def closed(self):
+        if getattr(self, "watch_id", None) is not None:
+            GLib.source_remove(self.watch_id)
+            self.watch_id = None
+
+    def build_top(self, i):
         cap = i["capacity"] or 0
         charging = i["status"] in ("Charging", "Full")
         status = {"Charging": "charging", "Discharging": "on battery", "Full": "full",
@@ -106,20 +154,7 @@ class Plugin(Base):
         overlay.set_valign(Gtk.Align.START)
         info = ui.vbox(ui.label("Battery", "card-title", xalign=0), ui.kv(facts, wrap=False), spacing=10)
         info.set_valign(Gtk.Align.CENTER)
-        top = ui.hbox(overlay, info, spacing=22)
-        parts = [top]
-        if util.have("powerprofilesctl") and util.run("powerprofilesctl get")[0] == 0:
-            parts.append(self.profiles())
-        if self.limit_file():
-            parts.append(self.limit_slider())
-        esc = ui.hint_label("Esc", "close")
-        esc.set_hexpand(True)
-        esc.set_halign(Gtk.Align.END)
-        foot = ui.hbox(ui.hint_label("P", "power profile"),
-                       ui.hint_label("Left/Right", "reminder") if self.limit_file() else None, esc, spacing=16)
-        foot.add_css_class("urja-foot")
-        parts.append(foot)
-        return ui.vbox(*parts, spacing=18, cls="card")
+        return ui.hbox(overlay, info, spacing=22)
 
     def profiles(self):
         cur = util.run("powerprofilesctl get")[1]
