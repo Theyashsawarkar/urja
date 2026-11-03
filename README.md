@@ -6,6 +6,15 @@
   </picture>
 </p>
 
+<!-- identity -->
+<p align="center">
+  <b>यदादित्यगतं तेजो जगद्भासयतेऽखिलम् ।<br>
+  यच्चन्द्रमसि यच्चाग्नौ तत्तेजो विद्धि मामकम् ॥</b><br>
+  <i>The radiance of the sun that lights the whole world, and that in the moon and in fire: know that radiance as mine.</i><br>
+  <sub>Bhagavad Gītā 15.12</sub>
+</p>
+<!-- /identity -->
+
 <p align="center">
   <b>Battery at a glance: charge ring, time left, power draw, health and cycles, power profile, a charge-limit reminder.</b><br>
   The battery at a glance. A tool for <a href="https://github.com/Theyashsawarkar/vyom">Vyom</a>, keyboard-driven panels for Wayland.

@@ -6,3 +6,6 @@ tagline = "Battery at a glance: charge ring, time left, power draw, health and c
 color = "green"
 kind = "a Vyom tool"
 logo = "assets/logo.svg"
+shloka = "यदादित्यगतं तेजो जगद्भासयतेऽखिलम् ।\nयच्चन्द्रमसि यच्चाग्नौ तत्तेजो विद्धि मामकम् ॥"
+shloka_meaning = "The radiance of the sun that lights the whole world, and that in the moon and in fire: know that radiance as mine."
+shloka_source = "Bhagavad Gītā 15.12"

@@ -2,6 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- A logo and a shloka at the top of the README and the website: every Vayu tool has them now.
+
 ## v0.1.3 -- 2026-10-21
 
 - Follows the theme: its colours are named (`@accent`, `@crust`...) instead
