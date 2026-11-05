@@ -2,6 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- Every corner is rounded: the website's callouts.
+
 ## v0.1.4 -- 2026-11-04
 
 - **The card stays true while it's open**: plug the charger in and it shows within 2 seconds, without disturbing the reminder slider. It used to show the moment you opened it, until you closed it.
