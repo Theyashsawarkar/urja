@@ -95,7 +95,7 @@ Open it with `vyom urja` (or your key). Type to search; the footer always shows 
 | `P` | Switch the power profile |
 | `Esc` | Close the panel |
 
-Every Vyom panel also has `Up`/`Down` (or `Ctrl+K`/`Ctrl+J`) to move, `Page Up`/`Page Down` to jump and `Tab` to switch to the next tool.
+Every Vyom panel also has `Up`/`Down` (or `Ctrl+K`/`Ctrl+J`) to move and `Page Up`/`Page Down` to jump. Each tool opens from its own key.
 
 ## Configuration
 
