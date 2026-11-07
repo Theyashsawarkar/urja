@@ -5,10 +5,11 @@ battery's health and cycle count, the power profile, and (when
 `limit_file` is set) a charge-limit reminder: the percentage a watcher of
 yours nudges you to unplug at (Vayu's battery-limit-watch.sh).
 """
-import math
+import collections
 import os
+import time
 
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gtk, Pango
 
 from vyom import Plugin as Base
 from vyom import ui, util
@@ -17,33 +18,52 @@ from . import battery
 
 REFRESH = 2  # seconds between looks at the battery while the card is open
 
-# keybind: Vyom/battery | Left / Right | Change the charge-limit reminder (on the slider)
+# keybind: Vyom/battery | Left / Right | Set the charge-limit reminder (on the slider)
 # keybind: Vyom/battery | P | Switch the power profile
 
 PROFILES = [("power-saver", "Power saver", "\U000f0f86"), ("balanced", "Balanced", "\U000f04c5"),
             ("performance", "Performance", "\U000f04c4")]
-STOPS = [0, 50, 60, 70, 75, 80, 90, 100]   # 0 = reminder off
+STOPS = [0, 50, 60, 70, 75, 80, 85, 90, 100]   # 0 = reminder off
 
 
-class Ring(Gtk.DrawingArea):
-    def __init__(self, pct, charging, low):
-        super().__init__()
-        self.pct, self.charging, self.low = pct, charging, low
-        self.set_content_width(132)
-        self.set_content_height(132)
+SAMPLE = 120  # seconds between our own charge samples (the graph's fallback when UPower has none)
+
+# `vyom urja demo`: made-up numbers, for screenshots and trying the card out.
+DEMO = {"name": "BAT0", "capacity": 96, "status": "Charging", "cycles": 600, "tech": "Li-ion", "model": "Primary",
+        "maker": "Hewlett-Packard", "plugged": True, "full_wh": 29.9, "watts": 18.2, "health": 63, "hours": 0.2}
+
+
+class Graph(Gtk.DrawingArea):
+    """The charge over the last 3 hours as rounded bars, in the ring's colour
+    (taken from its CSS class, so a theme's colours apply); steps with no
+    data yet are faint stubs."""
+
+    def __init__(self, color):
+        super().__init__(hexpand=True, content_height=50)
+        self.add_css_class(f"t-{color}")
+        self.steps = []
         self.set_draw_func(self.draw)
 
+    def set_points(self, points):
+        self.steps = battery.bins(points)
+        self.queue_draw()
+
     def draw(self, _a, cr, w, h):
-        cx, cy, r = w / 2, h / 2, min(w, h) / 2 - 9
-        cr.set_line_width(11)
-        cr.set_source_rgba(1, 1, 1, 0.08)
-        cr.arc(cx, cy, r, 0, 2 * math.pi)
-        cr.stroke()
-        col = (0.95, 0.55, 0.66) if self.low else (0.65, 0.89, 0.63)
-        cr.set_source_rgb(*col)
-        cr.set_line_cap(1)
-        cr.arc(cx, cy, r, -math.pi / 2, -math.pi / 2 + 2 * math.pi * max(0.01, self.pct / 100))
-        cr.stroke()
+        c = self.get_color()
+        n = len(self.steps) or 36
+        gap = 3
+        bw = (w - gap * (n - 1)) / n
+        for k in range(n):
+            p = self.steps[k] if k < len(self.steps) else None
+            x = k * (bw + gap)
+            if p is None:
+                cr.set_source_rgba(1, 1, 1, 0.07)
+                ui._round_rect(cr, x, h - 4, bw, 4, 2)
+            else:
+                bh = max(4, h * p[1] / 100)
+                cr.set_source_rgba(c.red, c.green, c.blue, 0.35 + 0.65 * (k + 1) / n)
+                ui._round_rect(cr, x, h - bh, bw, bh, min(3, bw / 2))
+            cr.fill()
 
 
 class Plugin(Base):
@@ -77,15 +97,68 @@ class Plugin(Base):
             with open(os.path.join(os.path.dirname(f), ".notified"), "w") as fh:
                 fh.write(str(pct))
 
-    def build_card(self):
+    def __init__(self, vyom, conf):
+        super().__init__(vyom, conf)
+        # Our own charge samples while the daemon runs: the graph's fallback
+        # (and gap filler) when UPower keeps no history.
+        self.samples = collections.deque(maxlen=battery.HISTORY // SAMPLE + 10)
+        self.sample()
+        GLib.timeout_add_seconds(SAMPLE, self.sample)
+        self.demo = False
+
+    def sample(self):
         i = battery.info()
+        if i and i["capacity"] is not None:
+            self.samples.append((time.time(), float(i["capacity"]), i["status"] == "Charging"))
+        return True
+
+    def opened(self, args):
+        super().opened(args)
+        self.demo = "demo" in args
+
+    def info(self):
+        if self.demo:
+            return dict(DEMO)
+        i = battery.info()
+        if i and not i["watts"]:
+            # No current from the battery: work it out from the charge history.
+            est = battery.estimate(i, getattr(self, "hist", []) + list(self.samples))
+            if est:
+                i["watts"], i["hours"], i["estimated"] = est[0], est[1], True
+        return i
+
+    def fetch_history(self):
+        """UPower's history over D-Bus, off the main loop; the card picks it
+        up on its next tick."""
+        def got(r):
+            if isinstance(r, list):
+                self.hist = r
+                if getattr(self, "graph", None) is not None:
+                    self.graph.set_points(self.history())
+        self.background(battery.upower_history, then=got)
+
+    def history(self):
+        if self.demo:   # a laptop charging from 40% over the last 3 hours
+            now = time.time()
+            return [(now - battery.HISTORY + k * 300, 40 + k * 1.6 if k < 36 else 96, True) for k in range(36)]
+        return sorted(getattr(self, "hist", []) + list(self.samples))
+
+    def build_card(self):
+        i = self.info()
         if not i:
-            return ui.vbox(ui.title("No battery"), cls="card")
+            return ui.vbox(ui.notice("No battery", "This machine has no battery that the kernel reports.", "yellow"),
+                           cls="card")
+        if not self.demo:
+            self.fetch_history()
         self.shown = self.fingerprint(i)
         self.top_holder = Gtk.Box()
         self.top_holder.append(self.build_top(i))
+        self.health_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        h = self.build_health(i)
+        if h is not None:
+            self.health_holder.append(h)
         self.watch()
-        parts = [self.top_holder]
+        parts = [self.top_holder, self.health_holder]
         if util.have("powerprofilesctl") and util.run("powerprofilesctl get")[0] == 0:
             parts.append(self.profiles())
         if self.limit_file():
@@ -93,26 +166,29 @@ class Plugin(Base):
         esc = ui.hint_label("Esc", "close")
         esc.set_hexpand(True)
         esc.set_halign(Gtk.Align.END)
-        foot = ui.hbox(ui.hint_label("P", "power profile"),
-                       ui.hint_label("Left/Right", "reminder") if self.limit_file() else None, esc, spacing=16)
+        foot = ui.hbox(ui.hint_label("P", "power profile") if getattr(self, "profile_keys", None) else None,
+                       ui.hint_label("←/→", "reminder") if self.limit_file() else None, esc, spacing=16)
         foot.add_css_class("urja-foot")
         parts.append(foot)
-        return ui.vbox(*parts, spacing=18, cls="card")
+        return ui.vbox(*parts, spacing=16, cls="card")
 
     @staticmethod
     def fingerprint(i):
         """What the top of the card shows: redrawn only when one of these changes."""
-        return (i["status"], i["capacity"], i["plugged"], i["hours"], round(i["watts"], 1))
+        return (i["status"], i["capacity"], i["plugged"], round(i["hours"] or 0, 2), round(i["watts"], 1))
 
     def watch(self):
         """Keep the card true while it's open: plugging the charger in shows in
-        REFRESH seconds. Only the ring and facts are redrawn, so the reminder
-        slider and the power profile aren't disturbed."""
+        REFRESH seconds. Only the ring, headline and graph are redrawn, so the
+        reminder slider and the power profile aren't disturbed."""
         if getattr(self, "watch_id", None) is None:
             self.watch_id = GLib.timeout_add_seconds(REFRESH, self.tick)
 
     def tick(self):
-        i = battery.info()
+        self.ticks = getattr(self, "ticks", 0) + 1
+        if not self.demo and self.ticks % 30 == 0:
+            self.fetch_history()
+        i = self.info()
         if i and self.fingerprint(i) != self.shown:
             self.shown = self.fingerprint(i)
             old = self.top_holder.get_first_child()
@@ -126,80 +202,132 @@ class Plugin(Base):
             GLib.source_remove(self.watch_id)
             self.watch_id = None
 
+    @staticmethod
+    def ring_color(i):
+        cap = i["capacity"] or 0
+        if i["plugged"] or cap > 30:
+            return "green"
+        return "yellow" if cap > 15 else "red"
+
     def build_top(self, i):
         cap = i["capacity"] or 0
-        charging = i["status"] in ("Charging", "Full")
-        status = {"Charging": "charging", "Discharging": "on battery", "Full": "full",
-                  "Not charging": "plugged in"}.get(i["status"], i["status"].lower())
-        ring = Ring(cap, charging, cap <= 20 and not i["plugged"])
-        overlay = Gtk.Overlay()
-        overlay.set_child(ring)
-        center = ui.vbox(ui.label(f"{cap}%", "big-number"), ui.label(status, "card-sub"), spacing=0)
-        center.set_halign(Gtk.Align.CENTER)
-        center.set_valign(Gtk.Align.CENTER)
-        overlay.add_overlay(center)
-        left = battery.fmt_hours(i["hours"])
-        facts = []
-        if left:
-            facts.append(("To full" if i["status"] == "Charging" else "Left", left))
+        color = self.ring_color(i)
+        state = {"Charging": ("\U000f140b", "charging"), "Discharging": ("\U000f0079", "on battery"),
+                 "Full": ("\U000f06a5", "full"), "Not charging": ("\U000f06a5", "plugged in")}
+        icon, word = state.get(i["status"], ("\U000f0079", (i["status"] or "unknown").lower()))
+        if i["status"] == "Discharging" and cap <= 15:
+            word = "low"
+        center = ui.vbox(ui.label(f"{cap}%", "urja-pct"),
+                         ui.hbox(ui.label(icon, "glyph"), ui.label(word), spacing=4, cls=f"t-{color}"), spacing=0)
+        center.get_last_child().set_halign(Gtk.Align.CENTER)
+        center.get_last_child().add_css_class("urja-state")
+        ring = ui.ring(cap / 100, color, 128, 11, center)
+        ring.set_valign(Gtk.Align.CENTER)
+
+        # The headline: when it'll be full, or how long it lasts.
+        left = battery.fmt_short(i["hours"])
+        if i["status"] == "Charging":
+            head = f"Full in {left}" if left else "Charging"
+        elif i["status"] == "Discharging":
+            head = f"{left} left" if left else "On battery"
+        elif i["status"] == "Full":
+            head = "Fully charged"
+        elif i["plugged"]:
+            head = "Plugged in, not charging"
+        else:
+            head = i["status"] or "Battery"
+        if i.get("estimated"):
+            head = {"Charging": f"Full in about {left}", "Discharging": f"About {left} left"}.get(i["status"], head)
         if i["watts"]:
-            facts.append(("Power", f"{i['watts']:.1f} W {'in' if i['status'] == 'Charging' else 'out'}"))
-        if i["health"]:
-            facts.append(("Health", f"{i['health']}% of design"))
+            w = f"{'about ' if i.get('estimated') else ''}{i['watts']:.1f} W"
+            note = f"+{w} into the battery" if i["status"] == "Charging" else f"Using {w}" \
+                if i["status"] == "Discharging" else f"{w}"
+            if i.get("estimated"):
+                note += ", going by the last half hour"
+        elif i["status"] == "Discharging":
+            note = "Measuring the power draw…"
+        else:
+            note = "No power flowing in or out"
+        graph = self.graph = Graph(color)
+        graph.set_points(self.history())
+        axis = ui.hbox(ui.label("3 h ago", "urja-axis", xalign=0, hexpand=True), ui.label("now", "urja-axis"))
+        right = ui.vbox(ui.label(head, "urja-head", xalign=0, ellipsize=Pango.EllipsizeMode.END),
+                        ui.label(note, "urja-note", xalign=0), spacing=2)
+        right.append(ui.vbox(graph, axis, spacing=4, cls="urja-graph"))
+        right.set_hexpand(True)
+        right.set_valign(Gtk.Align.CENTER)
+        return ui.hbox(ring, right, spacing=22)
+
+    def build_health(self, i):
+        if not i["health"]:
+            return None
+        word, color, meaning = battery.health_word(i["health"])
+        facts = []
+        if i.get("full_wh") and i["watts"] and i["status"] == "Discharging":
+            facts.append(f"About {battery.fmt_short(i['full_wh'] / i['watts'])} on a full charge")
         if i["cycles"]:
-            facts.append(("Cycles", str(i["cycles"])))
+            facts.append(f"{i['cycles']} cycles")
         maker = " ".join(x for x in (i.get("maker"), i.get("model")) if x)
         if maker:
-            facts.append(("Battery", f"{maker} · {i.get('tech') or ''}".strip(" ·")))
-        overlay.set_valign(Gtk.Align.START)
-        info = ui.vbox(ui.label("Battery", "card-title", xalign=0), ui.kv(facts, wrap=False), spacing=10)
-        info.set_valign(Gtk.Align.CENTER)
-        return ui.hbox(overlay, info, spacing=22)
+            facts.append(" ".join(x for x in (maker, i.get("tech")) if x))
+        note = meaning + (("\n" + " · ".join(facts)) if facts else "")
+        return ui.meter("Health", f"{i['health']}% · {word}", i["health"] / 100, color, note)
 
     def profiles(self):
-        cur = util.run("powerprofilesctl get")[1]
+        """A segmented control, the current profile filled; P cycles."""
         avail = util.run("powerprofilesctl list")[1]
-        box = Gtk.Box(spacing=8, homogeneous=True)
-        self.profile_buttons = {}
-        for key, label, icon in PROFILES:
-            if f"{key}:" not in avail:
-                continue
-            b = ui.button(label, lambda k=key: self.set_profile(k), "primary" if key == cur else "", icon)
-            self.profile_buttons[key] = b
-            box.append(b)
-        return ui.vbox(ui.label("Power profile", "kv-key", xalign=0), box, spacing=6)
+        self.profile_keys = [k for k, _l, _i in PROFILES if f"{k}:" in avail]
+        self.profile_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.show_profile(util.run("powerprofilesctl get")[1])
+        head = ui.hbox(ui.label("Power profile", "urja-label", xalign=0), ui.keycap("P"), spacing=8)
+        return ui.vbox(head, self.profile_holder, spacing=7)
+
+    def show_profile(self, cur):
+        old = self.profile_holder.get_first_child()
+        if old is not None:
+            self.profile_holder.remove(old)
+        opts = [(k, f"{i}  {l}") for k, l, i in PROFILES if k in self.profile_keys]
+        seg = ui.segmented(opts, cur, self.set_profile)
+        seg.add_css_class("urja-profiles")
+        seg.add_css_class(f"p-{cur}")
+        self.profile_holder.append(seg)
 
     def set_profile(self, key):
         util.run(["powerprofilesctl", "set", key])
-        for k, b in self.profile_buttons.items():
-            (b.add_css_class if k == key else b.remove_css_class)("primary")
+        self.show_profile(util.run("powerprofilesctl get")[1])
 
     def limit_slider(self):
         cur = self.read_limit()
-        head = ui.hbox(ui.label("Remind me to unplug at", "kv-val", xalign=0, hexpand=True),
+        head = ui.hbox(ui.label("Remind me to unplug at", "urja-label", xalign=0, hexpand=True),
                        ui.label(f"{cur}%" if cur else "off", "urja-limit"), spacing=8)
         self.limit_label = head.get_last_child()
+        (self.limit_label.add_css_class if not cur else self.limit_label.remove_css_class)("off")
         scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, len(STOPS) - 1, 1)
         scale.set_draw_value(False)
         scale.set_round_digits(0)
-        idx = STOPS.index(cur) if cur in STOPS else 0
+        scale.add_css_class("urja-scale")
+        idx = min(range(len(STOPS)), key=lambda n: abs(STOPS[n] - cur))   # the nearest stop
         scale.set_value(idx)
         for n, v in enumerate(STOPS):
             scale.add_mark(n, Gtk.PositionType.BOTTOM, "off" if v == 0 else str(v))
         scale.connect("value-changed", self.limit_changed)
         self.scale = scale
-        note = ui.label("A reminder, not a hardware cutoff: a nudge to unplug when charging crosses it.", "card-sub",
+        note = ui.label("A reminder, not a hardware cutoff: a nudge to unplug when charging crosses it.", "urja-note",
                         xalign=0, wrap=True)
-        return ui.vbox(head, scale, note, spacing=6)
+        return ui.vbox(head, scale, note, spacing=4)
 
     def limit_changed(self, scale):
         v = STOPS[int(round(scale.get_value()))]
         self.limit_label.set_label(f"{v}%" if v else "off")
-        self.write_limit(v)
+        (self.limit_label.add_css_class if not v else self.limit_label.remove_css_class)("off")
+        if not self.demo:
+            self.write_limit(v)
 
     def key(self, name, row, mods):
-        if name in ("p", "P") and hasattr(self, "profile_buttons") and self.profile_buttons:
-            keys = list(self.profile_buttons)
+        if mods:
+            return False
+        if name in ("p", "P") and getattr(self, "profile_keys", None):
+            keys = self.profile_keys
             cur = util.run("powerprofilesctl get")[1]
             self.set_profile(keys[(keys.index(cur) + 1) % len(keys)] if cur in keys else keys[0])
             return True

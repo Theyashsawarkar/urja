@@ -24,7 +24,7 @@
   <a href="https://github.com/Theyashsawarkar/urja/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Theyashsawarkar/urja/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/Theyashsawarkar/urja/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Theyashsawarkar/urja?color=cba6f7&label=release"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-f5e0dc"></a>
-  <a href="https://github.com/Theyashsawarkar/vyom"><img alt="Vyom 0.2.6+" src="https://img.shields.io/badge/vyom-0.2.6%2B-89b4fa"></a>
+  <a href="https://github.com/Theyashsawarkar/vyom"><img alt="Vyom 0.6.0+" src="https://img.shields.io/badge/vyom-0.6.0%2B-89b4fa"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-a6e3a1">
   <img alt="Wayland" src="https://img.shields.io/badge/wayland-layer--shell-94e2d5">
 </p>
@@ -50,18 +50,21 @@ urja is the battery at a glance for [Vyom](https://github.com/Theyashsawarkar/vy
 
 ## Features
 
-- A **charge ring**, time to full or empty, **power draw** in watts, the battery's **health** (of its design capacity) and **cycle count**.
+- **Time to full or time left as the headline**, next to a big **charge ring** (green, yellow when low, red when nearly empty, with the state in words).
+- The **power draw in watts**. Batteries that don't report a current (some HP firmware) get an estimate from how fast the charge moved over the last half hour, marked "about".
+- A **charge graph of the last 3 hours**: UPower's own history (read over D-Bus, no root needed), filled in with samples urja takes itself while Vyom runs.
+- **Health as a bar with a word**: green good (80%+), yellow worn, red replace (under 60%), with what it means in plain words, the cycle count and the battery's make.
+- The **power profile** (power-profiles-daemon) as a segmented control with the current one filled; a click or `P` switches it.
+- With `limit_file` set, a **charge-limit reminder** slider with its value in peach: the percentage a watcher of yours nudges you to unplug at.
+- `vyom urja demo` shows made-up numbers (for screenshots, or to try it on a desktop).
 - Works with both kinds of battery driver (energy_* / power_now, or charge_* / current_now).
-- The **power profile** (power-profiles-daemon), switched with a click or `P`.
-- With `limit_file` set, a **charge-limit reminder** slider: the percentage a watcher of yours nudges you to unplug at.
 - Keyboard first: every action has a key, shown in the footer; the mouse works too.
-- Never freezes the panel: slow commands run in the background.
 
 ## Install
 
 ### Requirements
 
-- [Vyom](https://github.com/Theyashsawarkar/vyom) 0.2.6 or newer (Python 3.11+, PyGObject, GTK 4, [gtk4-layer-shell](https://github.com/wmww/gtk4-layer-shell), a Nerd Font)
+- [Vyom](https://github.com/Theyashsawarkar/vyom) 0.6.0 or newer (Python 3.11+, PyGObject, GTK 4, [gtk4-layer-shell](https://github.com/wmww/gtk4-layer-shell), a Nerd Font)
 - optional: powerprofilesctl (power profile)
 
 ### Install
@@ -87,11 +90,11 @@ rm -rf ~/.local/share/vyom/plugins/urja && vyom reload          # uninstall
 
 ## Usage
 
-Open it with `vyom urja` (or your key). Type to search; the footer always shows the keys for what's selected.
+Open it with `vyom urja` (or your key). The footer always shows the keys.
 
 | Key | Action |
 |---|---|
-| `Left / Right` | Change the charge-limit reminder (on the slider) |
+| `Left / Right` | Set the charge-limit reminder (on the slider) |
 | `P` | Switch the power profile |
 | `Esc` | Close the panel |
 

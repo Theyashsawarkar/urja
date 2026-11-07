@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ADR 0004: 4. The charge graph comes from UPower&#x27;s history, over D-Bus · urja</title>
+<meta name="description" content="Battery at a glance: charge ring, time left, power draw, health and cycles, power profile, a charge-limit reminder.">
+<meta property="og:title" content="ADR 0004: 4. The charge graph comes from UPower&#x27;s history, over D-Bus · urja">
+<meta property="og:description" content="Battery at a glance: charge ring, time left, power draw, health and cycles, power profile, a charge-limit reminder.">
+<meta name="theme-color" content="#11111b">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<style>:root{--accent:#a6e3a1;--glow:#a6e3a133}</style>
+</head>
+<body>
+<header class="top"><div class="in">
+<a class="brand" href="../index.html"><img src="../assets/logo.svg" alt=""><span>urja <small>ऊर्जा</small></span></a>
+<nav><a href="../index.html" class="">Overview</a><a href="../changelog.html" class="">Changelog</a><a href="../adr/index.html" class="on hide">Decisions</a><a class="gh" href="https://github.com/Theyashsawarkar/urja">GitHub ↗</a></nav></div></header>
+
+<div class="wrap"><aside class="toc"></aside><article>
+<p class="n"><span class="status accepted">Accepted</span> <span style="color:var(--ov1);font:13px var(--mono)">ADR 0004 · 2026-11-07</span></p><h2 id="4-the-charge-graph-comes-from-upowers-history-over-d-bus"><a class="anchor" href="#4-the-charge-graph-comes-from-upowers-history-over-d-bus">#</a>4. The charge graph comes from UPower's history, over D-Bus</h2>
+<h2 id="context"><a class="anchor" href="#context">#</a>Context</h2>
+<p>The card shows the charge over the last three hours. UPower already records every battery's charge (<code>/var/lib/upower/history-charge-*.dat</code>), but those files are readable by root only. Some batteries (this HP's) also leave <code>current_now</code> empty, so there's no power draw to show.</p>
+<h2 id="decision"><a class="anchor" href="#decision">#</a>Decision</h2>
+<p>urja asks UPower for the history with <code>org.freedesktop.UPower.Device.GetHistory(&quot;charge&quot;, 3 h)</code> on the system bus, which needs no privileges, off the GTK main loop. It also samples the charge itself every two minutes while Vyom runs, and the graph uses both (UPower's history is lost on its restart). When the battery reports no current, the draw and time left are estimated from how fast the charge moved over the last half hour, and marked "about".</p>
+<h2 id="consequences"><a class="anchor" href="#consequences">#</a>Consequences</h2>
+<ul><li>No root, no new dependency (Gio is already there), works without UPower (the graph then starts when Vyom does).</li><li>Estimates are only shown when there's a steady stretch of at least three minutes with the charge moving.</li></ul><p style="margin-top:40px"><a href="index.html">← All decisions</a> · <a href="https://github.com/Theyashsawarkar/urja/blob/main/docs/adr/0004-charge-history-from-upower.md">source</a></p>
+</article></div>
+<footer><div class="in"><div><h4>Desktop</h4><a href="https://theyashsawarkar.github.io/vayu/" class="">vayu <span>वायु · the keyboard-driven Wayland desktop</span></a></div><div><h4>Apps</h4><a href="https://theyashsawarkar.github.io/kosha/" class="">kosha <span>कोश · package manager</span></a><a href="https://theyashsawarkar.github.io/nada/" class="">nada <span>नाद · music player</span></a><a href="https://theyashsawarkar.github.io/drishya/" class="">drishya <span>दृश्य · video player</span></a><a href="https://theyashsawarkar.github.io/sangam/" class="">sangam <span>संगम · pull requests in the terminal</span></a><a href="https://theyashsawarkar.github.io/narada/" class="">narada <span>नारद · mail and chat in the terminal</span></a><a href="https://theyashsawarkar.github.io/pattan/" class="">pattan <span>पत्तन · ports and tunnels</span></a><a href="https://theyashsawarkar.github.io/nauka/" class="">nauka <span>नौका · Docker in the terminal</span></a><a href="https://theyashsawarkar.github.io/vaikhari/" class="">vaikhari <span>वैखरी · posts to X and LinkedIn</span></a><a href="https://theyashsawarkar.github.io/dvarapala/" class="">dvarapala <span>द्वारपाल · commands for AI agents, approved</span></a><a href="https://theyashsawarkar.github.io/pramana/" class="">pramana <span>प्रमाण · password prompts</span></a><a href="https://theyashsawarkar.github.io/vesha/" class="">vesha <span>वेष · Claude Code accounts</span></a><a href="https://theyashsawarkar.github.io/vishvakarma/" class="">vishvakarma <span>विश्वकर्मा · skills for every AI agent</span></a><a href="https://theyashsawarkar.github.io/ekatva/" class="">ekatva <span>एकत्व · phone and laptop, linked</span></a><a href="https://theyashsawarkar.github.io/varna/" class="">varna <span>वर्ण · theme engine</span></a><a href="https://theyashsawarkar.github.io/vinyasa/" class="">vinyasa <span>विन्यास · settings</span></a></div><div><h4>Vyom</h4><a href="https://theyashsawarkar.github.io/vyom/" class="">vyom <span>व्योम · panels runtime</span></a></div><div><h4>Vyom tools</h4><a href="https://theyashsawarkar.github.io/dvara/" class="">dvara <span>द्वार · apps</span></a><a href="https://theyashsawarkar.github.io/ganit/" class="">ganit <span>गणित · calculator</span></a><a href="https://theyashsawarkar.github.io/smriti/" class="">smriti <span>स्मृति · clipboard</span></a><a href="https://theyashsawarkar.github.io/bhava/" class="">bhava <span>भाव · emoji</span></a><a href="https://theyashsawarkar.github.io/tarang/" class="">tarang <span>तरंग · Wi‑Fi</span></a><a href="https://theyashsawarkar.github.io/setu/" class="">setu <span>सेतु · Bluetooth</span></a><a href="https://theyashsawarkar.github.io/doot/" class="">doot <span>दूत · phone</span></a><a href="https://theyashsawarkar.github.io/patra/" class="">patra <span>पात्र · Docker</span></a><a href="https://theyashsawarkar.github.io/akashvani/" class="">akashvani <span>आकाशवाणी · notifications</span></a><a href="https://theyashsawarkar.github.io/raga/" class="">raga <span>राग · YouTube</span></a><a href="https://theyashsawarkar.github.io/mudra/" class="">mudra <span>मुद्रा · keybindings</span></a><a href="https://theyashsawarkar.github.io/urja/" class="me">urja <span>ऊर्जा · battery</span></a><a href="https://theyashsawarkar.github.io/vishram/" class="">vishram <span>विश्राम · power menu</span></a><a href="https://theyashsawarkar.github.io/kendra/" class="">kendra <span>केन्द्र · quick settings</span></a></div></div>
+<div class="bottom">urja is free software under the MIT license · <a href="https://github.com/Theyashsawarkar/urja">source</a> · <a href="https://github.com/Theyashsawarkar/urja/issues">issues</a> · <a href="../changelog.html">changelog</a> · part of <a href="https://theyashsawarkar.github.io/vayu/">Vayu</a></div></footer>
+<script>
+document.querySelectorAll('pre.code').forEach(p=>{const b=document.createElement('button');b.className='copy';b.textContent='Copy';
+b.onclick=()=>{navigator.clipboard.writeText(p.innerText.replace(/^Copy/,'')).then(()=>{b.textContent='Copied';setTimeout(()=>b.textContent='Copy',1200)})};p.appendChild(b)});
+const links=[...document.querySelectorAll('.toc a')];if(links.length){const hs=links.map(a=>document.getElementById(a.hash.slice(1))).filter(Boolean);
+const on=()=>{let cur=hs[0];for(const h of hs){if(h.getBoundingClientRect().top<120)cur=h}links.forEach(a=>a.classList.toggle('on',cur&&a.hash==='#'+cur.id))};
+addEventListener('scroll',on,{passive:true});on()}
+</script>
+</body>
+</html>
