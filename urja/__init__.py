@@ -12,14 +12,18 @@ import time
 from gi.repository import GLib, Gtk, Pango
 
 from vyom import Plugin as Base
-from vyom import ui, util
+from vyom import Hint, ui, util
 
-from . import battery
+from . import battery, vim
 
 REFRESH = 2  # seconds between looks at the battery while the card is open
 
-# keybind: Vyom/battery | Left / Right | Set the charge-limit reminder (on the slider)
-# keybind: Vyom/battery | P | Switch the power profile
+# KEYBINDS (generated from urja/vim.py by scripts/keybinds.py; don't edit by hand)
+# keybind: Vyom/battery:normal | p | Switch to the next power profile
+# keybind: Vyom/battery:normal | 0 | Turn the charge-limit reminder off
+# keybind: Vyom/battery leader:normal | Space y y | Copy a battery summary (87%, charging, 2 h left)
+# keybind: Vyom/battery leader:normal | Space o t | Open the battery's details (upower -i) in a terminal
+# END KEYBINDS
 
 PROFILES = [("power-saver", "Power saver", "\U000f0f86"), ("balanced", "Balanced", "\U000f04c5"),
             ("performance", "Performance", "\U000f04c4")]
@@ -70,6 +74,9 @@ class Plugin(Base):
     name, title, icon, color = "urja", "Battery", "\U000f0079", "green"
     layout = "card"
     width = 520
+    modal = True                # vim keys (Vyom 0.7): always NORMAL; the card cursor moves between controls
+    start_mode = "normal"
+    hints = [Hint("p", "power profile"), Hint("j / k", "move"), Hint("h / l", "change")]
 
     def available(self):
         return (bool(battery.batteries()), "no battery")
@@ -163,13 +170,7 @@ class Plugin(Base):
             parts.append(self.profiles())
         if self.limit_file():
             parts.append(self.limit_slider())
-        esc = ui.hint_label("Esc", "close")
-        esc.set_hexpand(True)
-        esc.set_halign(Gtk.Align.END)
-        foot = ui.hbox(ui.hint_label("P", "power profile") if getattr(self, "profile_keys", None) else None,
-                       ui.hint_label("←/→", "reminder") if self.limit_file() else None, esc, spacing=16)
-        foot.add_css_class("urja-foot")
-        parts.append(foot)
+        # The keys are in Vyom's footer (a modal card has one).
         return ui.vbox(*parts, spacing=16, cls="card")
 
     @staticmethod
@@ -274,12 +275,12 @@ class Plugin(Base):
         return ui.meter("Health", f"{i['health']}% · {word}", i["health"] / 100, color, note)
 
     def profiles(self):
-        """A segmented control, the current profile filled; P cycles."""
+        """A segmented control, the current profile filled; p cycles."""
         avail = util.run("powerprofilesctl list")[1]
         self.profile_keys = [k for k, _l, _i in PROFILES if f"{k}:" in avail]
         self.profile_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.show_profile(util.run("powerprofilesctl get")[1])
-        head = ui.hbox(ui.label("Power profile", "urja-label", xalign=0), ui.keycap("P"), spacing=8)
+        head = ui.hbox(ui.label("Power profile", "urja-label", xalign=0), ui.keycap("p"), spacing=8)
         return ui.vbox(head, self.profile_holder, spacing=7)
 
     def show_profile(self, cur):
@@ -323,16 +324,41 @@ class Plugin(Base):
         if not self.demo:
             self.write_limit(v)
 
-    def key(self, name, row, mods):
-        if mods:
-            return False
-        if name in ("p", "P") and getattr(self, "profile_keys", None):
-            keys = self.profile_keys
-            cur = util.run("powerprofilesctl get")[1]
-            self.set_profile(keys[(keys.index(cur) + 1) % len(keys)] if cur in keys else keys[0])
-            return True
-        if name in ("Left", "Right") and hasattr(self, "scale"):
-            v = self.scale.get_value() + (1 if name == "Right" else -1)
-            self.scale.set_value(max(0, min(len(STOPS) - 1, v)))
-            return True
-        return False
+    # ------------------------------------------------------------ vim keys
+    def keys(self, tab):
+        return vim.keys(tab)
+
+    def v_profile(self, _n, _a):
+        keys = getattr(self, "profile_keys", None)
+        if not keys:
+            self.set_status("no power profiles here (powerprofilesctl)", "bad")
+            return
+        cur = util.run("powerprofilesctl get")[1]
+        self.set_profile(keys[(keys.index(cur) + 1) % len(keys)] if cur in keys else keys[0])
+
+    def v_reminder(self, _n, _a):
+        if not hasattr(self, "scale"):
+            self.set_status("no charge-limit reminder here", "bad")
+            return
+        self.scale.set_value(0)
+
+    def v_copy(self, _n, _a):
+        i = self.info()
+        if not i or i.get("capacity") is None:
+            self.set_status("no battery to copy", "bad")
+            return
+        bits = [f"{i['capacity']}%", (i.get("status") or "").lower()]
+        if i.get("hours"):
+            h = i["hours"]
+            bits.append((f"{h:.1f} h" if h < 10 else f"{h:.0f} h") + (" to full" if i.get("status") == "Charging"
+                                                                      else " left"))
+        text = ", ".join(b for b in bits if b)
+        util.copy(text)
+        self.set_status(f"copied: {text}", "ok")
+
+    def v_upower(self, _n, _a):
+        name = (self.info() or {}).get("name") or "BAT0"
+        term = os.environ.get("TERMINAL") or next((t for t in ("kitty", "foot", "alacritty") if util.have(t)), "xterm")
+        util.spawn([term, "-e", "sh", "-c", f"upower -i $(upower -e | grep -m1 {name} || upower -e | grep -m1 BAT); "
+                    "echo; read -r -p 'Enter closes' _"])
+        self.close()

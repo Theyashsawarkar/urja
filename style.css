@@ -19,10 +19,13 @@
 .urja-profiles.p-power-saver button.seg.seg-on { background: @teal; }
 .urja-profiles.p-balanced button.seg.seg-on { background: @blue; }
 .urja-profiles.p-performance button.seg.seg-on { background: @green; }
-.urja-foot { margin: 0 -22px -22px -22px; padding: 9px 22px; border-top: 1px solid alpha(white, 0.06);
-  background: alpha(@crust, 0.25); border-radius: 0 0 20px 20px; }
 /* GTK's default highlight has a -1px margin: with no border it reports a
    negative size (a warning), so it gets none. */
 .plugin-urja scale highlight { margin: 0; }
 .plugin-urja progressbar trough { min-height: 8px; border-radius: 4px; border: none; background: alpha(white, 0.10); }
 .plugin-urja progressbar progress { min-height: 8px; border-radius: 4px; border: none; margin: 0; }
+
+/* Where the card cursor is (j / k / h / l): drawn by urja, not GTK's :focus. */
+.urja-profiles .seg.vk-cursor { box-shadow: inset 0 0 0 2px @accent; border-radius: 10px; }
+.urja-scale.vk-cursor { box-shadow: none; }
+.urja-scale.vk-cursor trough { box-shadow: 0 0 0 2px alpha(@accent, 0.7); }

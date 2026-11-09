@@ -2,6 +2,24 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## v0.3.0 -- 2026-11-09
+
+- Where you are on the card is drawn by Vyom core (`vk-cursor`) instead of urja's own focus watcher; the look is the same.
+- **Vim keys** (Vyom 0.7): always NORMAL (there's nothing to type);
+  `j` / `k` move between the power profiles and the reminder slider,
+  `h` / `l` move along the one you're on (a count first: `3l`), `0` / `$`
+  the slider's ends, `Enter` picks the focused profile. `Space` is the leader
+  (`Space ?` lists every key, `q` closes) and never presses a control.
+- **`p`** switches the power profile (it was documented as `P`, but Shift
+  never worked). Left / Right now move the control you're on, not always the
+  slider.
+- **New keys**: `0` turns the reminder off, `Space y y` copies a summary
+  ("87%, charging, 0.2 h to full"), `Space o t` opens `upower -i` in a
+  terminal.
+- Keys are data (`urja/vim.py`); `scripts/keybinds.py` writes the
+  `# keybind:` lines and the README table from it (`--check` in CI).
+- Needs Vyom 0.7.0.
+
 ## v0.2.0 -- 2026-11-07
 
 - **Time to full or time left is the headline**, next to a bigger charge ring that says its state in words ("charging", "on battery", "low").
