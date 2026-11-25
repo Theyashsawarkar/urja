@@ -2,6 +2,11 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- **Spatial look**: thicker pill sliders and bars; the profile under the cursor is a light rim.
+- The website has Vayu's Spatial look: graphite glass, a floating navigation bar, near-white for links and the main button, and the tool's own colour only as its signature (the logo's glow, the shloka's line, the release dots). No more all-caps labels.
+
 ## v0.3.0 -- 2026-11-09
 
 - Where you are on the card is drawn by Vyom core (`vk-cursor`) instead of urja's own focus watcher; the look is the same.
