@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img alt="urja: battery panel" src="assets/screenshots/urja.png" width="100%">
+  <img alt="urja: the battery at 99% and plugged in, its charge over the last hours, its health, the power profile and the unplug reminder" src="assets/screenshots/urja.webp" width="100%">
 </p>
 
 > *Urja* (ऊर्जा) is Sanskrit for "energy": the energy your laptop runs on.
