@@ -52,7 +52,7 @@ urja is the battery at a glance for [Vyom](https://github.com/Theyashsawarkar/vy
 
 - **Time to full or time left as the headline**, next to a big **charge ring** (green, yellow when low, red when nearly empty, with the state in words).
 - The **power draw in watts**. Batteries that don't report a current (some HP firmware) get an estimate from how fast the charge moved over the last half hour, marked "about".
-- A **charge graph of the last 3 hours**: UPower's own history (read over D-Bus, no root needed), filled in with samples urja takes itself while Vyom runs.
+- A **charge graph of the last 3 hours**: UPower's own history (read over D-Bus, no root needed) and every change since; with Vyom 0.10 Vyom's live state keeps it, so it's whole on opening and after Vyom restarts.
 - **Health as a bar with a word**: green good (80%+), yellow worn, red replace (under 60%), with what it means in plain words, the cycle count and the battery's make.
 - The **power profile** (power-profiles-daemon) as a segmented control with the current one filled; a click or `p` switches it.
 - **Vim keys** (Vyom 0.7): `j` / `k` / `h` / `l` move between and along the controls, `Space` is the leader, `?` lists every key.

@@ -112,16 +112,24 @@ class Plugin(Base):
     def __init__(self, vyom, conf):
         super().__init__(vyom, conf)
         # Our own charge samples while the daemon runs: the graph's fallback
-        # (and gap filler) when UPower keeps no history.
+        # (and gap filler) when UPower keeps no history. Not needed with
+        # Vyom 0.10: its live state keeps the charge's history (UPower's own
+        # record and every change since), so the graph is whole on opening
+        # and after a restart of Vyom.
         self.samples = collections.deque(maxlen=battery.HISTORY // SAMPLE + 10)
-        self.sample()
         self.demo = False
+        self.live_history = state is not None and hasattr(state, "history")
         if state is not None:
-            # A sample when UPower says the charge or state changed, no
-            # wakeups in between; the profile control follows the daemon.
-            state.watch("battery", lambda _s: self.sample())
             state.watch("power_profiles", lambda _s: self.profile_changed())
+        if self.live_history:
+            state.start("battery")
+        elif state is not None:
+            # A sample when UPower says the charge or state changed, no
+            # wakeups in between.
+            self.sample()
+            state.watch("battery", lambda _s: self.sample())
         else:
+            self.sample()
             GLib.timeout_add_seconds(SAMPLE, self.sample)
 
     def live_profiles(self):
@@ -153,14 +161,17 @@ class Plugin(Base):
         i = battery.info()
         if i and not i["watts"]:
             # No current from the battery: work it out from the charge history.
-            est = battery.estimate(i, getattr(self, "hist", []) + list(self.samples))
+            est = battery.estimate(i, self.history())
             if est:
                 i["watts"], i["hours"], i["estimated"] = est[0], est[1], True
         return i
 
     def fetch_history(self):
         """UPower's history over D-Bus, off the main loop; the card picks it
-        up on its next tick."""
+        up on its next tick. Vyom 0.10 keeps it already: nothing to fetch."""
+        if self.live_history:
+            return
+
         def got(r):
             if isinstance(r, list):
                 self.hist = r
@@ -172,6 +183,10 @@ class Plugin(Base):
         if self.demo:   # a laptop charging from 40% over the last 3 hours
             now = time.time()
             return [(now - battery.HISTORY + k * 300, 40 + k * 1.6 if k < 36 else 96, True) for k in range(36)]
+        if self.live_history:
+            h = state.history("battery", seconds=battery.HISTORY)
+            if h is not None:
+                return h
         return sorted(getattr(self, "hist", []) + list(self.samples))
 
     def build_card(self):

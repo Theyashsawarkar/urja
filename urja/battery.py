@@ -111,14 +111,23 @@ def upower_history(seconds=HISTORY):
             ps = GLib.Variant("(ss)", ("org.freedesktop.UPower.Device", "PowerSupply"))
             if not call(path, props, "Get", ps, "(v)")[0]:          # a mouse's battery, not the laptop's
                 continue
+            # all of it (a few hundred points): asked for the window only,
+            # UPower leaves out the point before it, so a charge that hasn't
+            # moved for 3 hours (plugged in, full) came back as nothing
             rows = call(path, "org.freedesktop.UPower.Device", "GetHistory",
-                        GLib.Variant("(suu)", ("charge", seconds, 400)), "(a(udu))")[0]
-            cut = time.time() - seconds
-            # UPower writes a point when the charge changes; state 1 is charging.
-            return sorted((t, v, st == 1) for t, v, st in rows if t >= cut - 3600)
+                        GLib.Variant("(suu)", ("charge", 0, 100000)), "(a(udu))")[0]
+            return since(sorted((t, v, st == 1) for t, v, st in rows), seconds)
     except Exception:   # no system bus, no UPower, an old UPower: the graph uses our own samples
         return []
     return []
+
+
+def since(points, seconds, now=None):
+    """The points in the last `seconds`, and the one before them (the
+    charge when the window starts: UPower writes only changes)."""
+    cut = (now or time.time()) - seconds
+    i = next((k for k, p in enumerate(points) if p[0] >= cut), len(points))
+    return points[max(0, i - 1):]
 
 
 def bins(points, n=36, seconds=HISTORY, now=None):
