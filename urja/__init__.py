@@ -16,6 +16,11 @@ from vyom import Hint, ui, util
 
 from . import battery, vim
 
+try:            # Vyom 0.9's live state: UPower and power-profiles-daemon, kept current by their signals
+    from vyom import live as state
+except ImportError:
+    state = None
+
 REFRESH = 2  # seconds between looks at the battery while the card is open
 
 # KEYBINDS (generated from urja/vim.py by scripts/keybinds.py; don't edit by hand)
@@ -110,12 +115,31 @@ class Plugin(Base):
         # (and gap filler) when UPower keeps no history.
         self.samples = collections.deque(maxlen=battery.HISTORY // SAMPLE + 10)
         self.sample()
-        GLib.timeout_add_seconds(SAMPLE, self.sample)
         self.demo = False
+        if state is not None:
+            # A sample when UPower says the charge or state changed, no
+            # wakeups in between; the profile control follows the daemon.
+            state.watch("battery", lambda _s: self.sample())
+            state.watch("power_profiles", lambda _s: self.profile_changed())
+        else:
+            GLib.timeout_add_seconds(SAMPLE, self.sample)
+
+    def live_profiles(self):
+        """(offered, active) from Vyom's live state, or None (an older Vyom,
+        no power-profiles-daemon): then powerprofilesctl, as before."""
+        snap = state.get("power_profiles") if state is not None else None
+        return (snap["profiles"], snap["active"]) if snap and snap.get("profiles") else None
+
+    def current_profile(self):
+        lp = self.live_profiles()
+        return lp[1] if lp else util.run("powerprofilesctl get")[1]
 
     def sample(self):
         i = battery.info()
-        if i and i["capacity"] is not None:
+        last = self.samples[-1] if self.samples else None
+        if i and i["capacity"] is not None and not (last and (last[1], last[2]) == (float(i["capacity"]),
+                                                                            i["status"] == "Charging")
+                                                    and time.time() - last[0] < SAMPLE):
             self.samples.append((time.time(), float(i["capacity"]), i["status"] == "Charging"))
         return True
 
@@ -166,7 +190,9 @@ class Plugin(Base):
             self.health_holder.append(h)
         self.watch()
         parts = [self.top_holder, self.health_holder]
-        if util.have("powerprofilesctl") and util.run("powerprofilesctl get")[0] == 0:
+        self.profile_holder = None
+        if self.live_profiles() or (state is None or state.get("power_profiles") is None) and \
+                util.have("powerprofilesctl") and util.run("powerprofilesctl get")[0] == 0:
             parts.append(self.profiles())
         if self.limit_file():
             parts.append(self.limit_slider())
@@ -276,10 +302,14 @@ class Plugin(Base):
 
     def profiles(self):
         """A segmented control, the current profile filled; p cycles."""
-        avail = util.run("powerprofilesctl list")[1]
-        self.profile_keys = [k for k, _l, _i in PROFILES if f"{k}:" in avail]
+        lp = self.live_profiles()
+        if lp:
+            self.profile_keys = [k for k, _l, _i in PROFILES if k in lp[0]]
+        else:
+            avail = util.run("powerprofilesctl list")[1]
+            self.profile_keys = [k for k, _l, _i in PROFILES if f"{k}:" in avail]
         self.profile_holder = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.show_profile(util.run("powerprofilesctl get")[1])
+        self.show_profile(lp[1] if lp else util.run("powerprofilesctl get")[1])
         head = ui.hbox(ui.label("Power profile", "urja-label", xalign=0), ui.keycap("p"), spacing=8)
         return ui.vbox(head, self.profile_holder, spacing=7)
 
@@ -294,8 +324,22 @@ class Plugin(Base):
         self.profile_holder.append(seg)
 
     def set_profile(self, key):
+        if self.live_profiles():
+            self.show_profile(key)      # at once; the daemon's signal confirms it
+            state.set_power_profile(key)
+            return
         util.run(["powerprofilesctl", "set", key])
         self.show_profile(util.run("powerprofilesctl get")[1])
+
+    def profile_changed(self):
+        """power-profiles-daemon switched (here, kendra, a key): redraw the
+        control if the card shows one."""
+        lp = self.live_profiles()
+        holder = getattr(self, "profile_holder", None)
+        if lp and holder is not None and getattr(self, "profile_keys", None):
+            cur = holder.get_first_child()
+            if cur is None or not cur.has_css_class(f"p-{lp[1]}"):
+                self.show_profile(lp[1])
 
     def limit_slider(self):
         cur = self.read_limit()
@@ -333,7 +377,7 @@ class Plugin(Base):
         if not keys:
             self.set_status("no power profiles here (powerprofilesctl)", "bad")
             return
-        cur = util.run("powerprofilesctl get")[1]
+        cur = self.current_profile()
         self.set_profile(keys[(keys.index(cur) + 1) % len(keys)] if cur in keys else keys[0])
 
     def v_reminder(self, _n, _a):

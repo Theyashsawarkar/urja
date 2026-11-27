@@ -4,6 +4,8 @@ Newest first. Releases are tags (`vX.Y.Z`).
 
 ## Unreleased
 
+- **Opens instantly** (first frame 25-70 ms, was 0.5-0.9 s on every opening): the power profile comes from Vyom's live state (power-profiles-daemon's own signals keep it current), not three `powerprofilesctl` runs (170 ms each) on the main loop; switching it is a D-Bus call that doesn't wait. With an older Vyom it asks the old way.
+- No wakeups while it's hidden: the graph's own charge samples are taken when UPower says the charge or state changed, not every 2 minutes (still every 2 minutes without Vyom's live state).
 - New screenshots in the Spatial look, taken with made-up demo data (WebP, sharp on high-density screens).
 - The website, closer to Vayu's own: the tool's screenshot blurred behind the page, a centred hero with the logo and the verse, the page you're on as the white pill, glass "On this page" and footer panels, releases as cards. No glow behind the logo, no coloured line beside the verse.
 - **Spatial look**: thicker pill sliders and bars; the profile under the cursor is a light rim.
