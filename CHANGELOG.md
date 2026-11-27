@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.5.0 -- 2026-11-27
 
 - **The charge graph is whole on every opening, also after Vyom restarts**: with Vyom 0.10 it's Vyom's battery history (UPower's own record, read once, and every change since), with no fetch on opening and no samples of urja's own.
 - The graph no longer goes blank when the charge hasn't moved for 3 hours (plugged in and full): UPower leaves out the point before the window when asked for the window only, so the whole record is asked for and the charge when the window starts carried in.
