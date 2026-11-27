@@ -2,7 +2,7 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
-## Unreleased
+## v0.4.0 -- 2026-11-27
 
 - **Opens instantly** (first frame 25-70 ms, was 0.5-0.9 s on every opening): the power profile comes from Vyom's live state (power-profiles-daemon's own signals keep it current), not three `powerprofilesctl` runs (170 ms each) on the main loop; switching it is a D-Bus call that doesn't wait. With an older Vyom it asks the old way.
 - No wakeups while it's hidden: the graph's own charge samples are taken when UPower says the charge or state changed, not every 2 minutes (still every 2 minutes without Vyom's live state).
