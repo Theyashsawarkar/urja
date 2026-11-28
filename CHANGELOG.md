@@ -2,6 +2,10 @@
 
 Newest first. Releases are tags (`vX.Y.Z`).
 
+## Unreleased
+
+- Website: pranali joins the family list in the footer; the site builder passes ruff.
+
 ## v0.5.0 -- 2026-11-27
 
 - **The charge graph is whole on every opening, also after Vyom restarts**: with Vyom 0.10 it's Vyom's battery history (UPower's own record, read once, and every change since), with no fetch on opening and no samples of urja's own.
